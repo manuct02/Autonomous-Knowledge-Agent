@@ -101,6 +101,52 @@ def route_to_specialist(state: TicketState)-> str:
     return  routing.get("route", "escalation_agent")
 
 
+from langchain_core.messages import HumanMessage, AIMessage
+
+def _run_agent(state: TicketState, agent_name: str) -> TicketState:
+    ticket_text = state.get("ticket_text", "")
+    metadata = state.get("metadata", {}) or {}
+
+    agent = agents.get(agent_name)
+    if agent is None:
+        raise RuntimeError(f"Agent not found: {agent_name}")
+
+    result = agent.invoke(
+        {"messages": [HumanMessage(content=ticket_text)], "metadata": metadata}
+    )
+
+    final_text = ""
+    for m in reversed(result.get("messages", [])):
+        if isinstance(m, AIMessage) and m.content:
+            final_text = m.content
+            break
+
+    if not final_text:
+        final_text = "No se pudo generar una respuesta automática."
+
+    logs = state.get("logs", []) or []
+    logs.append({"node": agent_name})
+
+    return {
+        **state,
+        "final_response": final_text,
+        "logs": logs,
+    }
+
+def billing_node(state: TicketState) -> TicketState:
+    return _run_agent(state, "billing_agent")
+
+def account_node(state: TicketState) -> TicketState:
+    return _run_agent(state, "account_agent")
+
+def tech_node(state: TicketState) -> TicketState:
+    return _run_agent(state, "tech_agent")
+
+def reservation_node(state: TicketState) -> TicketState:
+    return _run_agent(state, "reservation_agent")
+
+def escalation_node(state: TicketState) -> TicketState:
+    return _run_agent(state, "escalation_agent")
 
 
 def create_workflow():
@@ -109,7 +155,11 @@ def create_workflow():
 
     workflow.add_node("classify", classify_node)
     workflow.add_node("route", route_node)
-    workflow.add_node("specialist", specialist_node)
+    workflow.add_node("billing_specialist", billing_node)
+    workflow.add_node("account_specialist", account_node)
+    workflow.add_node("tech_specialist", tech_node)
+    workflow.add_node("reservation_specialist", reservation_node)
+    workflow.add_node("escalation_specialist", escalation_node)
 
     workflow.add_edge(START, "classify")
     workflow.add_edge("classify", "route")
@@ -117,22 +167,77 @@ def create_workflow():
         "route",
         route_to_specialist,
         {
-            # todas van al mismo nodo "specialist"
-            "billing_agent": "specialist",
-            "account_agent": "specialist",
-            "tech_agent": "specialist",
-            "reservation_agent": "specialist",
-            "escalation_agent": "specialist",
+            "billing_agent": "billing_specialist",
+            "account_agent": "account_specialist",
+            "tech_agent": "tech_specialist",
+            "reservation_agent": "reservation_specialist",
+            "escalation_agent": "escalation_specialist",
         },
     )
-    workflow.add_edge("specialist", END)
+
+    workflow.add_edge("billing_specialist", END)
+    workflow.add_edge("account_specialist", END)
+    workflow.add_edge("tech_specialist", END)
+    workflow.add_edge("reservation_specialist", END)
+    workflow.add_edge("escalation_specialist", END)
+
 
     return workflow
 
 agent_workflow= create_workflow()
 
+
 agent_graph= agent_workflow.compile(checkpointer=MemorySaver())
 agent_workflow_png= agent_graph.get_graph().draw_mermaid_png()
 
-with open("agent_workflow.png", "wb") as f:
-    f.write(agent_workflow_png)
+from langgraph.graph.state import CompiledStateGraph
+
+def run_system(
+        ticket_text: str,
+        graph: CompiledStateGraph,
+        thread_id: str,
+):
+    result= graph.invoke(
+        input={"ticket_text": ticket_text, "metadata": {"channel": "email"}},
+        config={
+            "configurable":{
+                "thread_id": thread_id,
+                
+            }
+        }
+    )
+    return result
+
+result= run_system(
+    ticket_text="I've been charged twice and I want a refund",
+    graph= agent_graph,
+    thread_id= "1"
+)
+
+print("\n" + "="*70)
+print("🎫 TICKET PROCESSED")
+print("="*70)
+
+print("\n📝 CLASIFICATION:")
+classification = result.get("classification", {})
+print(f"  • Intent: {classification.get('intent', 'N/A')}")
+print(f"  • Urgencia: {classification.get('urgency', 'N/A')}")
+print(f"  • Confianza: {classification.get('confidence', 0):.2f}")
+print(f"  • Razón: {classification.get('rationale', 'N/A')}")
+
+print("\n🔀 ROUTING:")
+routing = result.get("routing", {})
+print(f"  • Ruta: {routing.get('route', 'N/A')}")
+print(f"  • Confianza: {routing.get('confidence', 0):.2f}")
+print(f"  • Razón: {routing.get('rationale', 'N/A')}")
+
+print("\n💬 FINAL RESPONSE:")
+print("-" * 70)
+print(result.get("final_response", "No response was generated"))
+print("-" * 70)
+
+print("\n📋 EXECUTION LOGS:")
+for i, log in enumerate(result.get("logs", []), 1):
+    print(f"  {i}. {log}")
+
+print("\n" + "="*70)
