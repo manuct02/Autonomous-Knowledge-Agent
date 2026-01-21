@@ -19,10 +19,12 @@ def _resolve_first_existing(candidates: List[Path])-> Path:
     return candidates[0]
 
 def _cultpass_db_path()-> Path:
-    root= _project_root()
-    return _resolve_first_existing([root / "data" / "external" / "cultpass.db",
-                                    root.parent / "data" / "core" / "cultpass_articles.jsonl"
-                                    ])
+    root = _project_root()
+    return _resolve_first_existing([
+        root / "data" / "external" / "cultpass.db",
+        root.parent / "data" / "external" / "cultpass.db",
+    ])
+
 
 def _kb_jsonl_path() -> Path:
     root = _project_root()
@@ -190,7 +192,7 @@ def subscription_status(user_id: Optional[str]= None, email: Optional[str]= None
     ).model_dump()
 
 # Tool 3. Reservation lookup
-
+@tool
 def reservation_lookup(user_id: str, limit: int= 5)-> Dict[str, Any]:
     """
     List recent reservations for a user (cultpass.db).
