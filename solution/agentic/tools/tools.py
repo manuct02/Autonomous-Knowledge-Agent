@@ -94,3 +94,11 @@ class RetrieveKnowledgeOutput(BaseModel):
 
 # TOOLS
 
+@tool
+def account_lookup(email: str)-> Dict[str, Any]:
+    """
+    Look up a CultPass user by email in the external DB (cultpass.db).
+    Returns structured account info (found/user_id/is_blocked).
+    """
+    
+
