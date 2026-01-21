@@ -24,6 +24,13 @@ def _cultpass_db_path()-> Path:
                                     root.parent / "data" / "core" / "cultpass_articles.jsonl"
                                     ])
 
+def _kb_jsonl_path() -> Path:
+    root = _project_root()
+    return _resolve_first_existing([
+        root / "data" / "core" / "cultpass_articles.jsonl",
+        root.parent / "data" / "core" / "cultpass_articles.jsonl",
+    ])
+
 @lru_cache(maxsize= 4)
 def _engine(sqlite_path: str)-> Engine:
     return create_engine(f"sqlite:///{sqlite_path}", echo= False, future= True)
@@ -216,6 +223,62 @@ def reservation_lookup(user_id: str, limit: int= 5)-> Dict[str, Any]:
 
 # Tool 4. Retrieve knowledge 
 
-def _simple_text_score()
+def _simple_text_score(query: str, text: str)-> float:
+    """
+    Lightweight scoring for MVP (no embeddings): counts token overlap.
+    This keeps the tool deterministic and fast.
+    """
+    q= {t for t in (query or "").lower().split() if len(t)>= 3}
+    t= {t for t in (text or "").lower().split() if len(t)>= 3}
+
+    if not q or not t:
+        return 0.0
+    return len(q & t)/max(1, len(q))
+
+def _load_jsonl_articles(path: Path)-> List[Dict[str, Any]]:
+    if not path.exists():
+        return []
+    articles: List[Dict[str, Any]]= []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line= line.strip()
+        if not line:
+            continue
+        try:
+            import json
+            articles.append(json.loads(line))
+        except Exception:
+            # if a line is malformed, skip it but keep tool robust
+            continue
+    return articles
+
+
+
+@tool(args_schema=RetrieveKnowledgeInput)
+def retrieve_knowledge(query: str, k: int = 4) -> Dict[str, Any]:
+    """
+    Retrieve top-k KB articles relevant to the query.
+    MVP version reads from JSONL (cultpass_articles.jsonl).
+    Later we can swap to DB-backed retrieval without changing agent prompts.
+    """
+    query = (query or "").strip()
+    if not query:
+        return ToolError(error="empty_query").model_dump()
+
+    jsonl_path = _kb_jsonl_path()
+    articles = _load_jsonl_articles(jsonl_path)
+
+    scored: List[KnowledgeHit] = []
+    for a in articles:
+        title = a.get("title", "")
+        content = a.get("content", "")
+        tags = a.get("tags")
+        score = max(_simple_text_score(query, title), _simple_text_score(query, content))
+        if score > 0:
+            scored.append(KnowledgeHit(title=title, content=content, tags=tags, score=float(score)))
+
+    scored.sort(key=lambda x: x.score, reverse=True)
+    return RetrieveKnowledgeOutput(query=query, hits=scored[: int(k)]).model_dump()
+
+
         
 
