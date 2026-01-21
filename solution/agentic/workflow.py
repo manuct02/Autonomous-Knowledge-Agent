@@ -12,7 +12,7 @@ from langchain_core.messages import (
 from langchain_core.tools import Tool
 from langgraph.prebuilt import create_react_agent
 from langgraph.checkpoint.memory import MemorySaver
-
+import sqlite3
 
 
 from typing import Any, Dict, List, Optional, TypedDict
