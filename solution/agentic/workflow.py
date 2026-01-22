@@ -208,36 +208,3 @@ def run_system(
     )
     return result
 
-result= run_system(
-    ticket_text="I lost my password and cannot access my account. Please help me reset it.",
-    graph= agent_graph,
-    thread_id= "1"
-)
-
-print("\n" + "="*70)
-print("🎫 TICKET PROCESSED")
-print("="*70)
-
-print("\n📝 CLASIFICATION:")
-classification = result.get("classification", {})
-print(f"  • Intent: {classification.get('intent', 'N/A')}")
-print(f"  • Urgencia: {classification.get('urgency', 'N/A')}")
-print(f"  • Confianza: {classification.get('confidence', 0):.2f}")
-print(f"  • Razón: {classification.get('rationale', 'N/A')}")
-
-print("\n🔀 ROUTING:")
-routing = result.get("routing", {})
-print(f"  • Ruta: {routing.get('route', 'N/A')}")
-print(f"  • Confianza: {routing.get('confidence', 0):.2f}")
-print(f"  • Razón: {routing.get('rationale', 'N/A')}")
-
-print("\n💬 FINAL RESPONSE:")
-print("-" * 70)
-print(result.get("final_response", "No response was generated"))
-print("-" * 70)
-
-print("\n📋 EXECUTION LOGS:")
-for i, log in enumerate(result.get("logs", []), 1):
-    print(f"  {i}. {log}")
-
-print("\n" + "="*70)
