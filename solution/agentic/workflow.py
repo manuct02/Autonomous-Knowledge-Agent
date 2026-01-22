@@ -209,7 +209,7 @@ def run_system(
     return result
 
 result= run_system(
-    ticket_text="I've been charged twice and I want a refund",
+    ticket_text="I lost my password and cannot access my account. Please help me reset it.",
     graph= agent_graph,
     thread_id= "1"
 )
